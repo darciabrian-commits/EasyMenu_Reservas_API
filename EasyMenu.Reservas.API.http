@@ -1,0 +1,6 @@
+@EasyMenu.Reservas.API_HostAddress = http://localhost:5267
+
+GET {{EasyMenu.Reservas.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
