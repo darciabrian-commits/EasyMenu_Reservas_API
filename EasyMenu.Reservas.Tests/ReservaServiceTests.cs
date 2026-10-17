@@ -122,6 +122,99 @@ namespace EasyMenu.Reservas.Tests
                     reserva.Id,
                     "ATENDIDA"));
         }
+
+        [Fact]
+        public async Task ObtenerTodas_DebeRetornarReservasOrdenadas()
+        {
+            using var context = CrearContexto();
+            var mesa = await CrearMesaAsync(context);
+            var service = new ReservaService(context);
+
+            var primera = CrearReservaValida(mesa.Id);
+            primera.FechaReserva = DateOnly.FromDateTime(DateTime.Now.AddDays(3));
+            primera.HoraReserva = new TimeOnly(19, 0);
+
+            var segunda = CrearReservaValida(mesa.Id);
+            segunda.FechaReserva = DateOnly.FromDateTime(DateTime.Now.AddDays(2));
+            segunda.HoraReserva = new TimeOnly(18, 0);
+
+            await service.CrearAsync(primera);
+            await service.CrearAsync(segunda);
+
+            var reservas = await service.ObtenerTodasAsync();
+
+            Assert.Equal(2, reservas.Count);
+            Assert.Equal(segunda.FechaReserva, reservas[0].FechaReserva);
+            Assert.Equal(primera.FechaReserva, reservas[1].FechaReserva);
+        }
+
+        [Fact]
+        public async Task ObtenerPorIdExistente_DebeRetornarReserva()
+        {
+            using var context = CrearContexto();
+            var mesa = await CrearMesaAsync(context);
+            var service = new ReservaService(context);
+
+            var creada = await service.CrearAsync(CrearReservaValida(mesa.Id));
+
+            var reserva = await service.ObtenerPorIdAsync(creada.Id);
+
+            Assert.NotNull(reserva);
+            Assert.Equal(creada.Id, reserva.Id);
+            Assert.Equal("Cliente Prueba", reserva.NombreCliente);
+        }
+
+        [Fact]
+        public async Task ObtenerPorFecha_DebeRetornarSoloLaFechaSolicitada()
+        {
+            using var context = CrearContexto();
+            var mesa = await CrearMesaAsync(context);
+            var service = new ReservaService(context);
+
+            var fechaBuscada = DateOnly.FromDateTime(DateTime.Now.AddDays(2));
+
+            var reserva1 = CrearReservaValida(mesa.Id);
+            reserva1.FechaReserva = fechaBuscada;
+            reserva1.HoraReserva = new TimeOnly(18, 0);
+
+            var reserva2 = CrearReservaValida(mesa.Id);
+            reserva2.FechaReserva = DateOnly.FromDateTime(DateTime.Now.AddDays(3));
+            reserva2.HoraReserva = new TimeOnly(19, 0);
+
+            await service.CrearAsync(reserva1);
+            await service.CrearAsync(reserva2);
+
+            var resultado = await service.ObtenerPorFechaAsync(fechaBuscada);
+
+            Assert.Single(resultado);
+            Assert.Equal(fechaBuscada, resultado[0].FechaReserva);
+        }
+
+        [Fact]
+        public async Task ActualizarReservaValida_DebeModificarDatos()
+        {
+            using var context = CrearContexto();
+            var mesa = await CrearMesaAsync(context);
+            var service = new ReservaService(context);
+
+            var creada = await service.CrearAsync(CrearReservaValida(mesa.Id));
+
+            var cambios = CrearReservaValida(mesa.Id);
+            cambios.NombreCliente = "Cliente Actualizado";
+            cambios.Telefono = "7111-1111";
+            cambios.FechaReserva = DateOnly.FromDateTime(DateTime.Now.AddDays(4));
+            cambios.HoraReserva = new TimeOnly(19, 30);
+            cambios.CantidadPersonas = 3;
+            cambios.Observaciones = "Actualizada";
+
+            var actualizada = await service.ActualizarAsync(creada.Id, cambios);
+
+            Assert.NotNull(actualizada);
+            Assert.Equal("Cliente Actualizado", actualizada.NombreCliente);
+            Assert.Equal("7111-1111", actualizada.Telefono);
+            Assert.Equal(3, actualizada.CantidadPersonas);
+            Assert.Equal("Actualizada", actualizada.Observaciones);
+        }
     }
 }
 
