@@ -215,6 +215,74 @@ namespace EasyMenu.Reservas.Tests
             Assert.Equal(3, actualizada.CantidadPersonas);
             Assert.Equal("Actualizada", actualizada.Observaciones);
         }
-    }
+        
+        [Fact]
+public async Task NombreClienteVacio_DebeRechazarReserva()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+
+    var reserva = CrearReservaValida(mesa.Id);
+    reserva.NombreCliente = "";
+
+    await Assert.ThrowsAsync<ArgumentException>(
+        () => service.CrearAsync(reserva));
 }
 
+[Fact]
+public async Task CantidadPersonasCero_DebeRechazarReserva()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+
+    var reserva = CrearReservaValida(mesa.Id);
+    reserva.CantidadPersonas = 0;
+
+    await Assert.ThrowsAsync<ArgumentException>(
+        () => service.CrearAsync(reserva));
+}
+
+[Fact]
+public async Task FechaPasada_DebeRechazarReserva()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+
+    var reserva = CrearReservaValida(mesa.Id);
+    reserva.FechaReserva = DateOnly.FromDateTime(DateTime.Now.AddDays(-1));
+
+    await Assert.ThrowsAsync<ArgumentException>(
+        () => service.CrearAsync(reserva));
+}
+
+[Fact]
+public async Task MesaInexistente_DebeRechazarReserva()
+{
+    using var context = CrearContexto();
+    var service = new ReservaService(context);
+
+    var reserva = CrearReservaValida(999);
+
+    await Assert.ThrowsAsync<InvalidOperationException>(
+        () => service.CrearAsync(reserva));
+}
+
+[Fact]
+public async Task CambiarEstadoValido_DebeActualizarEstado()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+
+    var creada = await service.CrearAsync(CrearReservaValida(mesa.Id));
+    var actualizada = await service.CambiarEstadoAsync(creada.Id, "confirmada");
+
+    Assert.NotNull(actualizada);
+    Assert.Equal("CONFIRMADA", actualizada.Estado);
+}
+
+    }
+}
