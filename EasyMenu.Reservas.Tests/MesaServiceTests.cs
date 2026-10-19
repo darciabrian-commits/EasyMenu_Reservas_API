@@ -50,6 +50,119 @@ namespace EasyMenu.Reservas.Tests
             await Assert.ThrowsAsync<InvalidOperationException>(
                 () => service.CrearAsync(1, 6));
         }
+
+        [Fact]
+        public async Task ObtenerTodas_DebeRetornarMesasOrdenadasPorNumero()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            await service.CrearAsync(3, 4);
+            await service.CrearAsync(1, 2);
+            await service.CrearAsync(2, 6);
+
+            var mesas = await service.ObtenerTodasAsync();
+
+            Assert.Equal(3, mesas.Count);
+            Assert.Equal(1, mesas[0].Numero);
+            Assert.Equal(2, mesas[1].Numero);
+            Assert.Equal(3, mesas[2].Numero);
+        }
+
+        [Fact]
+        public async Task ObtenerPorIdExistente_DebeRetornarMesa()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var creada = await service.CrearAsync(5, 4);
+
+            var mesa = await service.ObtenerPorIdAsync(creada.Id);
+
+            Assert.NotNull(mesa);
+            Assert.Equal(5, mesa.Numero);
+            Assert.Equal(4, mesa.Capacidad);
+        }
+
+        [Fact]
+        public async Task ObtenerPorIdInexistente_DebeRetornarNull()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var mesa = await service.ObtenerPorIdAsync(999);
+
+            Assert.Null(mesa);
+        }
+
+        [Fact]
+        public async Task ActualizarMesaValida_DebeModificarDatos()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var creada = await service.CrearAsync(1, 4);
+
+            var actualizada = await service.ActualizarAsync(
+                creada.Id,
+                2,
+                6,
+                false);
+
+            Assert.NotNull(actualizada);
+            Assert.Equal(2, actualizada.Numero);
+            Assert.Equal(6, actualizada.Capacidad);
+            Assert.False(actualizada.Activa);
+
+        }
+
+        [Fact]
+        public async Task CrearNumeroCero_DebeLanzarError()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => service.CrearAsync(0, 4));
+        }
+
+        [Fact]
+        public async Task ActualizarMesaInexistente_DebeRetornarNull()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var resultado = await service.ActualizarAsync(999, 1, 4, true);
+
+            Assert.Null(resultado);
+        }
+
+        [Fact]
+        public async Task ActualizarCapacidadCero_DebeLanzarError()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var mesa = await service.CrearAsync(1, 4);
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => service.ActualizarAsync(mesa.Id, 1, 0, true));
+        }
+
+        [Fact]
+        public async Task ActualizarConNumeroDeOtraMesa_DebeLanzarError()
+        {
+            using var context = CrearContexto();
+            var service = new MesaService(context);
+
+            var mesa1 = await service.CrearAsync(1, 4);
+            await service.CrearAsync(2, 6);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.ActualizarAsync(mesa1.Id, 2, 4, true));
+        }
     }
 }
+        
+
 
