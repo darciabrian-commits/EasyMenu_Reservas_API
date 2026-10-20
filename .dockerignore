@@ -1,0 +1,17 @@
+bin/
+obj/
+publish/
+
+EasyMenu.Reservas.Tests/bin/
+EasyMenu.Reservas.Tests/obj/
+
+.git/
+.gitignore
+
+.vs/
+.vscode/
+.idea/
+
+*.user
+*.suo
+*.log
