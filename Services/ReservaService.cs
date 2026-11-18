@@ -1,6 +1,9 @@
 using EasyMenu.Reservas.API.Data;
 using EasyMenu.Reservas.API.Models;
+using System.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace EasyMenu.Reservas.API.Services
 {
@@ -51,73 +54,112 @@ namespace EasyMenu.Reservas.API.Services
 
         public async Task<Reserva> CrearAsync(Reserva nuevaReserva)
         {
-            await ValidarReservaAsync(nuevaReserva, null);
+            await using var transaction = await IniciarTransaccionSerializableAsync();
 
-            nuevaReserva.Estado = "PENDIENTE";
-            nuevaReserva.FechaCreacion = DateTime.Now;
+            try
+            {
+                await ValidarReservaAsync(nuevaReserva, null);
 
-            _context.Reservas.Add(nuevaReserva);
-            await _context.SaveChangesAsync();
+                nuevaReserva.Estado = "PENDIENTE";
+                nuevaReserva.FechaCreacion = DateTime.Now;
 
-            return await ObtenerPorIdAsync(nuevaReserva.Id)
-                ?? nuevaReserva;
+                _context.Reservas.Add(nuevaReserva);
+                await _context.SaveChangesAsync();
+                if (transaction is not null)
+                    await transaction.CommitAsync();
+
+                return await ObtenerPorIdAsync(nuevaReserva.Id)
+                    ?? nuevaReserva;
+            }
+            catch (Exception ex) when (EsConflictoConcurrente(ex))
+            {
+                throw CrearErrorConflicto(ex);
+            }
         }
 
         public async Task<Reserva?> ActualizarAsync(
             int id,
             Reserva datosActualizados)
         {
-            var reserva = await _context.Reservas
-                .FirstOrDefaultAsync(r => r.Id == id);
+            await using var transaction = await IniciarTransaccionSerializableAsync();
 
-            if (reserva == null)
-                return null;
+            try
+            {
+                var reserva = await _context.Reservas
+                    .FirstOrDefaultAsync(r => r.Id == id);
 
-            datosActualizados.Id = id;
-            await ValidarReservaAsync(datosActualizados, id);
+                if (reserva == null)
+                    return null;
 
-            reserva.NombreCliente = datosActualizados.NombreCliente;
-            reserva.Telefono = datosActualizados.Telefono;
-            reserva.FechaReserva = datosActualizados.FechaReserva;
-            reserva.HoraReserva = datosActualizados.HoraReserva;
-            reserva.CantidadPersonas = datosActualizados.CantidadPersonas;
-            reserva.MesaId = datosActualizados.MesaId;
-            reserva.Observaciones = datosActualizados.Observaciones;
+                datosActualizados.Id = id;
+                await ValidarReservaAsync(datosActualizados, id);
 
-            await _context.SaveChangesAsync();
+                reserva.NombreCliente = datosActualizados.NombreCliente;
+                reserva.Telefono = datosActualizados.Telefono;
+                reserva.FechaReserva = datosActualizados.FechaReserva;
+                reserva.HoraReserva = datosActualizados.HoraReserva;
+                reserva.CantidadPersonas = datosActualizados.CantidadPersonas;
+                reserva.MesaId = datosActualizados.MesaId;
+                reserva.Observaciones = datosActualizados.Observaciones;
 
-            return await ObtenerPorIdAsync(id);
+                await _context.SaveChangesAsync();
+                if (transaction is not null)
+                    await transaction.CommitAsync();
+
+                return await ObtenerPorIdAsync(id);
+            }
+            catch (Exception ex) when (EsConflictoConcurrente(ex))
+            {
+                throw CrearErrorConflicto(ex);
+            }
         }
 
         public async Task<Reserva?> CambiarEstadoAsync(
             int id,
             string nuevoEstado)
         {
-            var reserva = await _context.Reservas
-                .FirstOrDefaultAsync(r => r.Id == id);
+            await using var transaction = await IniciarTransaccionSerializableAsync();
 
-            if (reserva == null)
-                return null;
-
-            nuevoEstado = nuevoEstado.Trim().ToUpperInvariant();
-
-            if (!EstadosPermitidos.Contains(nuevoEstado))
+            try
             {
-                throw new ArgumentException(
-                    "Estado inválido. Use PENDIENTE, CONFIRMADA, ATENDIDA o CANCELADA.");
-            }
+                var reserva = await _context.Reservas
+                    .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (reserva.Estado == "CANCELADA" &&
-                nuevoEstado == "ATENDIDA")
+                if (reserva == null)
+                    return null;
+
+                nuevoEstado = nuevoEstado.Trim().ToUpperInvariant();
+
+                if (!EstadosPermitidos.Contains(nuevoEstado))
+                {
+                    throw new ArgumentException(
+                        "Estado inválido. Use PENDIENTE, CONFIRMADA, ATENDIDA o CANCELADA.");
+                }
+
+                if (reserva.Estado == "CANCELADA" &&
+                    nuevoEstado == "ATENDIDA")
+                {
+                    throw new InvalidOperationException(
+                        "Una reserva cancelada no puede pasar a ATENDIDA.");
+                }
+
+                if (reserva.Estado == "CANCELADA" &&
+                    nuevoEstado != "CANCELADA")
+                {
+                    await ValidarReservaAsync(reserva, id);
+                }
+
+                reserva.Estado = nuevoEstado;
+                await _context.SaveChangesAsync();
+                if (transaction is not null)
+                    await transaction.CommitAsync();
+
+                return await ObtenerPorIdAsync(id);
+            }
+            catch (Exception ex) when (EsConflictoConcurrente(ex))
             {
-                throw new InvalidOperationException(
-                    "Una reserva cancelada no puede pasar a ATENDIDA.");
+                throw CrearErrorConflicto(ex);
             }
-
-            reserva.Estado = nuevoEstado;
-            await _context.SaveChangesAsync();
-
-            return await ObtenerPorIdAsync(id);
         }
 
         private async Task ValidarReservaAsync(
@@ -127,6 +169,18 @@ namespace EasyMenu.Reservas.API.Services
             if (string.IsNullOrWhiteSpace(reserva.NombreCliente))
                 throw new ArgumentException(
                     "El nombre del cliente es obligatorio.");
+
+            if (reserva.NombreCliente.Length > 120)
+                throw new ArgumentException(
+                    "El nombre del cliente no puede superar 120 caracteres.");
+
+            if (reserva.Telefono?.Length > 30)
+                throw new ArgumentException(
+                    "El teléfono no puede superar 30 caracteres.");
+
+            if (reserva.Observaciones?.Length > 300)
+                throw new ArgumentException(
+                    "Las observaciones no pueden superar 300 caracteres.");
 
             if (reserva.CantidadPersonas <= 0)
                 throw new ArgumentException(
@@ -169,6 +223,39 @@ namespace EasyMenu.Reservas.API.Services
                 throw new InvalidOperationException(
                     "La mesa ya tiene una reserva en esa fecha y hora.");
             }
+        }
+
+        private async Task<IDbContextTransaction?> IniciarTransaccionSerializableAsync()
+        {
+            return _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable)
+                : null;
+        }
+
+        private static bool EsConflictoConcurrente(Exception exception)
+        {
+            return ObtenerSqlException(exception)?.Number is 1205 or 2601 or 2627;
+        }
+
+        private static InvalidOperationException CrearErrorConflicto(Exception exception)
+        {
+            var mensaje = ObtenerSqlException(exception)?.Number == 1205
+                ? "La reserva entró en conflicto con otra operación concurrente. Intente nuevamente."
+                : "La mesa ya tiene una reserva en esa fecha y hora.";
+
+            return new InvalidOperationException(mensaje);
+        }
+
+        private static SqlException? ObtenerSqlException(Exception exception)
+        {
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                if (current is SqlException sqlException)
+                    return sqlException;
+            }
+
+            return null;
         }
     }
 }

@@ -63,7 +63,8 @@ namespace EasyMenu.Reservas.API.Migrations
 
                     b.Property<string>("Estado")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime>("FechaCreacion")
                         .HasColumnType("datetime2");
@@ -89,7 +90,9 @@ namespace EasyMenu.Reservas.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MesaId");
+                    b.HasIndex("MesaId", "FechaReserva", "HoraReserva")
+                        .IsUnique()
+                        .HasFilter("[Estado] <> N'CANCELADA'");
 
                     b.ToTable("Reservas");
                 });

@@ -28,6 +28,20 @@ namespace EasyMenu.Reservas.API.Data
                 .WithMany(m => m.Reservas)
                 .HasForeignKey(r => r.MesaId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Reserva>()
+                .Property(r => r.Estado)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<Reserva>()
+                .HasIndex(r => new
+                {
+                    r.MesaId,
+                    r.FechaReserva,
+                    r.HoraReserva
+                })
+                .IsUnique()
+                .HasFilter("[Estado] <> N'CANCELADA'");
         }
     }
 }

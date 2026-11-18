@@ -1,11 +1,13 @@
 using EasyMenu.Reservas.API.DTOs.Mesas;
 using EasyMenu.Reservas.API.Models;
 using EasyMenu.Reservas.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyMenu.Reservas.API.Controllers
 {
     [ApiController]
+    [Authorize(Policy = "ReservasAdministracion")]
     [Route("api/[controller]")]
     public class MesasController : ControllerBase
     {

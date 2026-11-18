@@ -284,5 +284,48 @@ public async Task CambiarEstadoValido_DebeActualizarEstado()
     Assert.Equal("CONFIRMADA", actualizada.Estado);
 }
 
+[Fact]
+public async Task ReservaCancelada_NoBloqueaElHorarioPeroNoPuedeReactivarseConConflicto()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+
+    var cancelada = await service.CrearAsync(CrearReservaValida(mesa.Id));
+    await service.CambiarEstadoAsync(cancelada.Id, "CANCELADA");
+    var activa = await service.CrearAsync(CrearReservaValida(mesa.Id));
+
+    await Assert.ThrowsAsync<InvalidOperationException>(
+        () => service.CambiarEstadoAsync(cancelada.Id, "PENDIENTE"));
+
+    var persistida = await service.ObtenerPorIdAsync(cancelada.Id);
+    Assert.Equal("CANCELADA", persistida!.Estado);
+    Assert.Equal("PENDIENTE", activa.Estado);
+}
+
+[Fact]
+public async Task DatosDeContactoQueSuperanLimites_DebenRechazarse()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+    var reserva = CrearReservaValida(mesa.Id);
+    reserva.Telefono = new string('1', 31);
+
+    await Assert.ThrowsAsync<ArgumentException>(
+        () => service.CrearAsync(reserva));
+}
+
+[Fact]
+public async Task EstadoNoPermitido_DebeRechazarse()
+{
+    using var context = CrearContexto();
+    var mesa = await CrearMesaAsync(context);
+    var service = new ReservaService(context);
+    var reserva = await service.CrearAsync(CrearReservaValida(mesa.Id));
+
+    await Assert.ThrowsAsync<ArgumentException>(
+        () => service.CambiarEstadoAsync(reserva.Id, "DESCONOCIDO"));
+}
     }
 }
